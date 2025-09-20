@@ -4,7 +4,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 // Load Stripe with publishable key
-const stripePromise = loadStripe('pk_test_51RmK54DlFtiJrCQa60BMAjDw2pxSDLv36bGRCzse8svH6Z1CLHG3GNjE0ZyI5z7phSDcqE27gKznPibltF04uh7M00eKmkX55A');
+const stripePromise = loadStripe('pk_test_51ReZ2wFZnb6rhAJYhVFgdZVFXMet0Cu1UH4zzP7rP9Fy307nI6FOt6tOnvypkGcPhLOQdkytzRQ2YDoXdH2QQBgp00d2aBYlmm');
 
 // Payment Component (Updated with Stripe Elements)
 const Payment = ({ selectedPlan, onBack }) => {
@@ -76,7 +76,7 @@ const Payment = ({ selectedPlan, onBack }) => {
       }
 
       // Step 3: Record payment in backend
-      await fetch('http://localhost:5000/api/payment/record-payment', {
+      const res2 = await fetch('http://localhost:5000/api/payment/record-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,7 +87,10 @@ const Payment = ({ selectedPlan, onBack }) => {
           billingAddress: billingDetails.address,
         }),
       });
-
+      const newRes = await res2.json();
+      console.log(newRes.user);
+      const user = await JSON.stringify(newRes.user);
+      localStorage.setItem("user", user);
       setSuccess(true);
       console.log('Payment successful:', paymentIntent);
     } catch (err) {

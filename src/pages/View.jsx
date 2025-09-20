@@ -36,7 +36,10 @@ const View = () => {
   const [platform, setPlatform] = useState('amazon');
   const [whiteBackground, setWhiteBackground] = useState(false);
   const [processing, setProcessing] = useState(false);
- const [processedImages, setProcessedImages] = useState([]);
+  const [processedImages, setProcessedImages] = useState([]);
+
+  // Plan state - Load from localStorage with fallback
+  const [userPlan, setUserPlan] = useState('Free');
 
   const [optimizationOptions, setOptimizationOptions] = useState({
     upscale: true,
@@ -56,6 +59,20 @@ const View = () => {
   const [generatingBackground, setGeneratingBackground] = useState(false);
   const [generatedBackgrounds, setGeneratedBackgrounds] = useState([]);
   const [validGeneratedBackgrounds, setValidGeneratedBackgrounds] = useState([]);
+
+  // Load user plan from localStorage (safe with fallback)
+  useEffect(() => {
+    try {
+      const storedUser = localStorage?.getItem?.('user');
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        setUserPlan(userData?.planName || 'Free');
+      }
+    } catch (error) {
+      console.warn('Could not load user plan from localStorage:', error);
+      setUserPlan('Free');
+    }
+  }, []);
 
   // Auto-detect platform from URL if available
   useEffect(() => {
@@ -224,10 +241,11 @@ const View = () => {
     } else {
       addLog(`ℹ️ Collection/category URL detected, collecting up to ${maxToScrape} products`, 'info');
     }
-let progressInterval;
+
+    let progressInterval;
     try {
       addLog('📡 Connecting to server...', 'info');
-       progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setProgress(prev => {
           const newProgress = Math.min(prev + 2, 90); // Slower progress for better UX
           if (newProgress % 10 === 0) {
@@ -299,26 +317,34 @@ let progressInterval;
 
   // Toggle select all/none images
   const toggleSelectAll = () => {
-  if (selectedImages.length === scrapedImages.length) {
-    setSelectedImages([]);   // Deselect all
-  } else {
-    setSelectedImages(scrapedImages.map(img => img.id));  // Select all
-  }
-};
-
-
-  // // Select all images
-  // const selectAllImages = () => {
-  //   const allIds = validScrapedImages.map(img => img.id);
-  //   setSelectedImages(allIds);
-  //   setValidScrapedImages(prev => prev.map(img => ({ ...img, selected: true })));
-  // };
+    if (selectedImages.length === scrapedImages.length) {
+      setSelectedImages([]);   // Deselect all
+    } else {
+      setSelectedImages(scrapedImages.map(img => img.id));  // Select all
+    }
+  };
 
   // Clear all selections
   const clearSelections = () => {
     setSelectedImages([]);
     setValidScrapedImages(prev => prev.map(img => ({ ...img, selected: false })));
   };
+
+  // Plan-based feature access helpers
+  const isFree = userPlan === 'Free';
+  const isStarter = userPlan === 'Starter';
+  const isGrowth = userPlan === 'Growth';
+  const isEnterprise = userPlan === 'Enterprise';
+
+  // Define what sidebar items are available for each plan
+  const planSidebarMap = {
+    'Free': ['gallery'],
+    'Starter': ['gallery', 'background-removal'],
+    'Growth': ['gallery', 'background-removal', 'optimization', 'background-generation'],
+    'Enterprise': ['gallery', 'background-removal', 'optimization', 'background-generation', 'merge', 'report', 'settings']
+  };
+
+  const allowedSidebarItems = planSidebarMap[userPlan] || planSidebarMap['Free'];
 
   // Sidebar navigation items
   const sidebarItems = [
@@ -330,6 +356,9 @@ let progressInterval;
     { id: 'report', label: 'Task Reports', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
+
+  // Filter sidebar items based on user plan
+  const visibleSidebarItems = sidebarItems.filter(item => allowedSidebarItems.includes(item.id));
 
   // Render the appropriate scraper component based on platform
   const renderScraper = () => {
@@ -397,16 +426,21 @@ let progressInterval;
                 PixelLift
               </h1>
             </div>
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
-              className="bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              disabled={isScraping}
-            >
-              <option value="amazon">Amazon</option>
-              <option value="ebay">eBay</option>
-              <option value="shopify">Shopify</option>
-            </select>
+            <div className="flex items-center gap-3">
+              <select
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+                className="bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={isScraping}
+              >
+                <option value="amazon">Amazon</option>
+                <option value="ebay">eBay</option>
+                <option value="shopify">Shopify</option>
+              </select>
+              <div className="text-xs text-gray-300">
+                <span className="text-white font-semibold">{userPlan}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -462,10 +496,10 @@ let progressInterval;
             </div>
           </div>
 
-          {/* Navigation Items */}
+          {/* Navigation Items - Only show items allowed by user's plan */}
           <div className="flex-1 p-3 sm:p-4 overflow-y-auto">
             <nav className="space-y-1 sm:space-y-2">
-              {sidebarItems.map((item) => {
+              {visibleSidebarItems.map((item) => {
                 const IconComponent = item.icon;
                 return (
                   <button
@@ -494,7 +528,7 @@ let progressInterval;
         {/* Main Content */}
         <div className="flex-1 flex flex-col lg:mt-0 mt-16 sm:mt-20 lg:pt-0 pt-16">
           {/* Desktop Platform Selector */}
-          <div className="hidden lg:flex items-center gap-2 p-4 sm:p-6 pb-0">
+          <div className="hidden lg:flex items-center justify-between gap-2 p-4 sm:p-6 pb-0">
             <select
               value={platform}
               onChange={(e) => setPlatform(e.target.value)}
@@ -505,6 +539,9 @@ let progressInterval;
               <option value="ebay">eBay</option>
               <option value="shopify">Shopify</option>
             </select>
+            <div className="text-sm text-gray-300">
+              Plan: <span className="text-white font-semibold ml-1">{userPlan}</span>
+            </div>
           </div>
 
           {/* Main Content Area */}
@@ -512,72 +549,89 @@ let progressInterval;
             {activeSection === 'gallery' && (
               <div className="space-y-4 sm:space-y-6">
                 {renderScraper()}
-                <BackgroundRemoval
-                  selectedImages={selectedImages}
-                  scrapedImages={scrapedImages}
-                  setScrapedImages={setValidScrapedImages}
-                  setSelectedImages={setSelectedImages}
-                  platform={platform}
-                  whiteBackground={whiteBackground}
-                  setWhiteBackground={setWhiteBackground}
-                  processing={processing}
-                  setProcessing={setProcessing}
-                  processedImages={processedImages}
-                  setProcessedImages={setProcessedImages}
-                  toggleSelectAll={toggleSelectAll}
-                  clearSelections={clearSelections}
-                />
-                <ImageOptimization
-                  selectedImages={selectedImages}
-                  scrapedImages={scrapedImages}
-                  processedImages={processedImages}  // Add this line
-                  optimizationOptions={optimizationOptions}
-                  setOptimizationOptions={setOptimizationOptions}
-                  optimizing={optimizing}
-                  setOptimizing={setOptimizing}
-                  optimizationResults={optimizationResults}
-                  setOptimizationResults={setOptimizationResults}
-                  optimizedImages={optimizedImages}
-                  setOptimizedImages={setOptimizedImages}
-                  addLog={addLog}
-                  toggleSelectAll={toggleSelectAll}
-                  clearSelections={clearSelections}
-                  platform={platform}
-                />
-                <BackgroundGeneration
-                  selectedImages={selectedImages}
-                  scrapedImages={scrapedImages}
-                  backgroundPrompt={backgroundPrompt}
-                  setBackgroundPrompt={setBackgroundPrompt}
-                  negativePrompt={negativePrompt}
-                  setNegativePrompt={setNegativePrompt}
-                  numImages={numImages}
-                  setNumImages={setNumImages}
-                  imageSize={imageSize}
-                  setImageSize={setImageSize}
-                  quality={quality}
-                  setQuality={setQuality}
-                  generatingBackground={generatingBackground}
-                  setGeneratingBackground={setGeneratingBackground}
-                  generatedBackgrounds={validGeneratedBackgrounds}
-                  setGeneratedBackgrounds={setValidGeneratedBackgrounds}
-                  addLog={addLog}
-                  toggleSelectAll={toggleSelectAll}
-                  clearSelections={clearSelections}
-                  platform={platform}
-                />
-                <Merge
-                  scrapedImages={scrapedImages}
-                  generatedBackgrounds={validGeneratedBackgrounds}
-                  addLog={addLog}
-                  toggleSelectAll={toggleSelectAll}
-                  clearSelections={clearSelections}
-                  platform={platform}
-                />
+                
+                {/* Background Removal - Available for Starter, Growth, Enterprise */}
+                {(isStarter || isGrowth || isEnterprise) && (
+                  <BackgroundRemoval
+                    selectedImages={selectedImages}
+                    scrapedImages={scrapedImages}
+                    setScrapedImages={setValidScrapedImages}
+                    setSelectedImages={setSelectedImages}
+                    platform={platform}
+                    whiteBackground={whiteBackground}
+                    setWhiteBackground={setWhiteBackground}
+                    processing={processing}
+                    setProcessing={setProcessing}
+                    processedImages={processedImages}
+                    setProcessedImages={setProcessedImages}
+                    toggleSelectAll={toggleSelectAll}
+                    clearSelections={clearSelections}
+                  />
+                )}
+                
+                {/* Image Optimization - Available for Starter, Growth, Enterprise */}
+                {(isStarter || isGrowth || isEnterprise) && (
+                  <ImageOptimization
+                    selectedImages={selectedImages}
+                    scrapedImages={scrapedImages}
+                    processedImages={processedImages}
+                    optimizationOptions={optimizationOptions}
+                    setOptimizationOptions={setOptimizationOptions}
+                    optimizing={optimizing}
+                    setOptimizing={setOptimizing}
+                    optimizationResults={optimizationResults}
+                    setOptimizationResults={setOptimizationResults}
+                    optimizedImages={optimizedImages}
+                    setOptimizedImages={setOptimizedImages}
+                    addLog={addLog}
+                    toggleSelectAll={toggleSelectAll}
+                    clearSelections={clearSelections}
+                    platform={platform}
+                  />
+                )}
+                
+                {/* Background Generation - Available for Growth, Enterprise */}
+                {(isGrowth || isEnterprise) && (
+                  <BackgroundGeneration
+                    selectedImages={selectedImages}
+                    scrapedImages={scrapedImages}
+                    backgroundPrompt={backgroundPrompt}
+                    setBackgroundPrompt={setBackgroundPrompt}
+                    negativePrompt={negativePrompt}
+                    setNegativePrompt={setNegativePrompt}
+                    numImages={numImages}
+                    setNumImages={setNumImages}
+                    imageSize={imageSize}
+                    setImageSize={setImageSize}
+                    quality={quality}
+                    setQuality={setQuality}
+                    generatingBackground={generatingBackground}
+                    setGeneratingBackground={setGeneratingBackground}
+                    generatedBackgrounds={validGeneratedBackgrounds}
+                    setGeneratedBackgrounds={setValidGeneratedBackgrounds}
+                    addLog={addLog}
+                    toggleSelectAll={toggleSelectAll}
+                    clearSelections={clearSelections}
+                    platform={platform}
+                  />
+                )}
+                
+                {/* Merge - Available for Enterprise only */}
+                {isEnterprise && (
+                  <Merge
+                    scrapedImages={scrapedImages}
+                    generatedBackgrounds={validGeneratedBackgrounds}
+                    addLog={addLog}
+                    toggleSelectAll={toggleSelectAll}
+                    clearSelections={clearSelections}
+                    platform={platform}
+                  />
+                )}
               </div>
             )}
 
-            {activeSection === 'background-removal' && (
+            {/* Individual section views - only render if user has access */}
+            {activeSection === 'background-removal' && (isStarter || isGrowth || isEnterprise) && (
               <div className="space-y-4 sm:space-y-6">
                 <BackgroundRemoval
                   selectedImages={selectedImages}
@@ -597,12 +651,12 @@ let progressInterval;
               </div>
             )}
 
-            {activeSection === 'optimization' && (
+            {activeSection === 'optimization' && (isStarter || isGrowth || isEnterprise) && (
               <div className="space-y-4 sm:space-y-6">
                 <ImageOptimization
                   selectedImages={selectedImages}
                   scrapedImages={validScrapedImages}
-                  processedImages={processedImages}  // Add this line
+                  processedImages={processedImages}
                   optimizationOptions={optimizationOptions}
                   setOptimizationOptions={setOptimizationOptions}
                   optimizing={optimizing}
@@ -619,7 +673,7 @@ let progressInterval;
               </div>
             )}
 
-            {activeSection === 'background-generation' && (
+            {activeSection === 'background-generation' && (isGrowth || isEnterprise) && (
               <div className="space-y-4 sm:space-y-6">
                 <BackgroundGeneration
                   selectedImages={selectedImages}
@@ -646,7 +700,7 @@ let progressInterval;
               </div>
             )}
 
-            {activeSection === 'merge' && (
+            {activeSection === 'merge' && isEnterprise && (
               <div className="space-y-4 sm:space-y-6">
                 <Merge
                   scrapedImages={validScrapedImages}
@@ -659,13 +713,13 @@ let progressInterval;
               </div>
             )}
 
-            {activeSection === 'report' && (
+            {activeSection === 'report' && isEnterprise && (
               <div className="space-y-4 sm:space-y-6">
                 <Report addLog={addLog} />
               </div>
             )}
 
-            {activeSection === 'settings' && (
+            {activeSection === 'settings' && isEnterprise && (
               <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6 sm:p-8 text-center">
                 <div className="text-4xl sm:text-5xl mb-4">🚧</div>
                 <h3 className="text-lg sm:text-xl font-medium text-white mb-2">Under Construction</h3>
@@ -677,21 +731,33 @@ let progressInterval;
             <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 sm:p-6 mt-4 sm:mt-6">
               <h3 className="text-base sm:text-lg font-medium text-white mb-4">Logs</h3>
               <div className="space-y-2 max-h-64 sm:max-h-96 overflow-y-auto">
-                {logs.map((log,index) => (
-                  <div key={`${log.timestamp}-${index}`}
+                {logs.map((log, index) => (
+                  <div 
+                    key={`${log.timestamp}-${index}`}
                     className={`text-xs sm:text-sm p-2 sm:p-3 rounded ${
                       log.type === 'error'
                         ? 'bg-red-500/20 text-red-300'
                         : log.type === 'warning'
                         ? 'bg-yellow-500/20 text-yellow-300'
+                        : log.type === 'success'
+                        ? 'bg-green-500/20 text-green-300'
                         : 'bg-gray-800/50 text-gray-300'
                     }`}
                   >
-                    <span className="hidden sm:inline">[{new Date(log.timestamp).toLocaleString()}] </span>
-                    <span className="sm:hidden">[{new Date(log.timestamp).toLocaleTimeString()}] </span>
+                    <span className="hidden sm:inline">
+                      [{new Date(log.timestamp).toLocaleString()}] 
+                    </span>
+                    <span className="sm:hidden">
+                      [{new Date(log.timestamp).toLocaleTimeString()}] 
+                    </span>
                     {log.message}
                   </div>
                 ))}
+                {logs.length === 0 && (
+                  <div className="text-xs sm:text-sm p-3 text-gray-400 text-center">
+                    No logs yet. Start scraping to see activity.
+                  </div>
+                )}
               </div>
             </div>
           </div>
